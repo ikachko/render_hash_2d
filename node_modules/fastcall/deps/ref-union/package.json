@@ -1,0 +1,33 @@
+{
+  "name": "ref-union",
+  "description": "Create ABI-compliant \"union\" instances on top of Buffers",
+  "keywords": [
+    "union",
+    "ref",
+    "abi",
+    "c",
+    "c++",
+    "ffi"
+  ],
+  "version": "1.0.1",
+  "author": "Nathan Rajlich <nathan@tootallnate.net> (http://tootallnate.net)",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/TooTallNate/ref-union.git"
+  },
+  "main": "./lib/union.js",
+  "license": "MIT",
+  "scripts": {
+    "test": "node-gyp rebuild --directory test && mocha -gc --reporter spec"
+  },
+  "dependencies": {
+    "debug": "2",
+    "ref": "1"
+  },
+  "devDependencies": {
+    "mocha": "*",
+    "nan": "2",
+    "ref-struct": "1",
+    "bindings": "1"
+  }
+}
