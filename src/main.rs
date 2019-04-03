@@ -8,8 +8,9 @@ use std::io;
 
 use std::fs::{self, DirEntry, File};
 use std::path::Path;
+use std::fmt;
 
-use byteorder::{ByteOrder, LittleEndian};
+// use byteorder::{ByteOrder, LittleEndian};
 use sha2::{Sha256, Sha512, Digest};
 
 const IMAGE_SIZE_X: usize = 1920 * 2;
@@ -21,10 +22,9 @@ const TEX_SIZE_Y: usize = 1080;
 
 const RECT_COUNT: usize = 6;
 
-// const SCALE_X: usize = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
-// const SCALE_Y: usize = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
-
 const RECT_LIST_BUF_SIZE: usize = 1000 * 8 * 4;
+
+const TEX_COUNT: usize = 4;
 
 static KERNEL_SRC: &'static str = r#"
 __kernel void draw_call_rect_list(
@@ -84,12 +84,19 @@ enum FileReadError {
 	// RequestError(req::Error),
 }
 
-struct RectList {
+struct Rect {
 	x: usize,
 	y: usize,
 	w: usize,
 	h: usize,
 	t: usize
+}
+
+impl fmt::Display for Rect {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "x: {}, y: {}, w: {}, h: {}, t: {}",
+					self.x, self.y, self.w, self.h, self.t)
+	}
 }
 
 struct OpenCL {
@@ -113,7 +120,7 @@ impl From<png::DecodingError> for FileReadError {
 
 fn read_files(dir: &str, s_open_cl: &OpenCL) -> Result<Vec<u8>, FileReadError> {
 	let paths = fs::read_dir(dir)?;
-	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * 4;
+	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * TEX_COUNT;
 	let mut image_atlas = vec![0; tex_size_bytes];
 	
 	let mut tex_offset = 0;
@@ -157,6 +164,40 @@ fn sha256_hash(data: &[u8]) -> [u8; 32] {
 	ret
 }
 
+fn hash(msg: &[u8]) {
+	let scene_seed = sha256_hash(msg);
+
+	let mut offset = 0;
+	let mut rect_list: Vec<Rect> = Vec::new();
+
+	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
+	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
+
+	println!("scale_x: {}, scale_y: {}", scale_x, scale_y);
+
+	for i in 0..RECT_COUNT {
+		let x = scene_seed[offset % scene_seed.len()] as usize * scale_x;
+		offset += 1;
+		let y = scene_seed[offset % scene_seed.len()] as usize * scale_y;
+		offset += 1;
+		let w = scene_seed[offset % scene_seed.len()] as usize * scale_x;
+		offset += 1;
+		let h = scene_seed[offset % scene_seed.len()] as usize * scale_y;
+		offset += 1;
+		let t = scene_seed[offset % scene_seed.len()] as usize * TEX_COUNT;
+
+		rect_list.push(Rect {
+			x,
+			y,
+			w,
+			h,
+			t
+		})
+	}
+	for (i, rect) in rect_list.iter().enumerate() {
+		println!("{}: {}", i, rect);
+	}
+}
 
 fn init_opencl() -> OpenCL {
 	let platform = ocl::Platform::default();
@@ -204,5 +245,7 @@ fn render() {
 }
 
 fn main() {
-	render();
+	// render();
+	let msg: [u8; 32] = [0; 32];
+	hash(&msg);
 }
