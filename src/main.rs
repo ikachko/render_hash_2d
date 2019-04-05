@@ -138,17 +138,10 @@ fn read_files(dir: &str, s_open_cl: &OpenCL) -> Result<Vec<u8>, FileReadError> {
 		let color_type = info.color_type;
 
 		let num_bytes = {
-			if color_type == png::ColorType::RGB {
-				3
-			} else if color_type == png::ColorType::RGBA {
+			if color_type == png::ColorType::RGBA {
 				4
 			} else {3} 
 		};
-		// let num_bytes = match  {
-			// color_type == png::ColorType::RGBA => 4,
-			// color_type == png::ColorType::RGB => 3,
-		// } 
-		// println!("color type: {:#?}", info.color_type);
 		
 		reader.next_frame(&mut buff)?;
 		
@@ -156,21 +149,16 @@ fn read_files(dir: &str, s_open_cl: &OpenCL) -> Result<Vec<u8>, FileReadError> {
 			for y in 0..TEX_SIZE_Y {
 				let src_offset = num_bytes * (x + y * width);
 				let dst_offset = 4 * (x + y * TEX_SIZE_X) + tex_offset;
-				// if (x >= width || y >= height) {
-				// 	image_atlas[dst_offset] = 0;
-				// 	image_atlas[dst_offset + 1] = 0;
-				// 	image_atlas[dst_offset + 2] = 0;
-				// 	image_atlas[dst_offset + 3] = 255;
-				// } else {
+
 				image_atlas[dst_offset] = buff[src_offset];
 				image_atlas[dst_offset + 1] = buff[src_offset + 1];
 				image_atlas[dst_offset + 2] = buff[src_offset + 2];
 				image_atlas[dst_offset + 3] = 255;
-				// }
 			}
 		}
 		tex_offset += width * height * num_bytes;
 	}
+	println!("Reading files from {} is finished.", &dir);
 	Ok(image_atlas)
 } 
 
@@ -184,77 +172,62 @@ fn sha256_hash(data: &[u8]) -> [u8; 32] {
 
 fn render_image(rect_list: &[Rect], image_atlas: &Vec<u8>) -> Vec<u8> {
 	let mut image_result: Vec<u8> = vec![0; IMAGE_SIZE_BYTE];
-	let mut rect_minus_one_count = 0;
-	let mut rect_not_minus_one_count = 0;
+
+	let mut min_one = 0;
+	let mut not_min_one = 0;
 
 	for id in 0..(IMAGE_SIZE_X * IMAGE_SIZE_Y) {
 		let x = id % IMAGE_SIZE_X;
 		let y = (id as f64 / IMAGE_SIZE_X as f64).floor() as usize;
-		// let y = id / IMAGE_SIZE_X;
 	
-		let rect_id: isize = -1;
-		// println!("id: {}", id);
-		for i in 0..rect_list.len() {
-			let mut is_minus_one = false;
+		let mut rect_id: isize = -1;
 
-			let rect_x = rect_list[i].x;
-			let rect_y = rect_list[i].y;
-			let rect_w = rect_list[i].w;
-			let rect_h = rect_list[i].h;
-			let rect_tex_idx = rect_list[i].t;
+		let mut rect_x = 0;
+		let mut rect_y = 0;
+		let mut rect_w = 0;
+		let mut rect_h = 0;
+		let mut rect_tex_idx = 0;
+
+		for i in 0..rect_list.len() {
+			rect_x = rect_list[i].x;
+			rect_y = rect_list[i].y;
+			rect_w = rect_list[i].w;
+			rect_h = rect_list[i].h;
 
 			let fit_x = x >= rect_x && (x < rect_x + rect_w);
 			let fit_y = y >= rect_y && (y < rect_y + rect_h);
 
-			let rect_id: isize = if (fit_x && fit_y) {i as isize} else {rect_id};
-
-			// println!("rect_id: {}, id: {}", rect_id, id);
-
-			if (rect_id == -1) {
-				// println!("rect_id = -1, id: {}", id);
-				// rect_minus_one_count += 1;
-				image_result[4 * id] = 128;
-				image_result[4 * id + 1] = 128;
-				image_result[4 * id + 2] = 128;
-				image_result[4 * id + 3] = 255;
-				continue;
-			}
-			rect_not_minus_one_count += 1;
-			let tex_offset_x = (x - rect_x) % TEX_SIZE_X;
-			let tex_offset_y = (y - rect_y) % TEX_SIZE_Y;
-			let tex_offset = tex_offset_x + tex_offset_y * TEX_SIZE_X;
-			let tex_offset = tex_offset + rect_tex_idx * TEX_SIZE_X * TEX_SIZE_Y;
-			
-			image_result[4*id+0] = image_atlas[4*tex_offset+0];
-			image_result[4*id+1] = image_atlas[4*tex_offset+1];
-			image_result[4*id+2] = image_atlas[4*tex_offset+2];
-			image_result[4*id+3] = image_atlas[4*tex_offset+3];
-
-			// if id % 500 == 0 {
-			// 	println!("image_atlas -> id: {}, R: {}, G: {}, B: {}, A: {}",
-			// 		id,
-			// 		image_atlas[4*tex_offset+0],
-			// 		image_atlas[4*tex_offset+1],
-			// 		image_atlas[4*tex_offset+2],
-			// 		image_atlas[4*tex_offset+3]);
-			// 	println!("image_result -> id: {}, R: {}, G: {}, B: {}, A: {}\n",
-			// 		id,
-			// 		image_result[4*id+0],
-			// 		image_result[4*id+1],
-			// 		image_result[4*id+2],
-			// 		image_result[4*id+3]);
-			// }
-				// image_result[id] = 
-			// println!("RECT IS NOT -1 : {}", rect_id);
-			// let rect_id = rect_id as usize;
-
-			// let rect_x = rect_list[rect_id].x;
-			// let rect_y = rect_list[rect_id].y;
-			// let rect_tex_idx = rect_list[rect_id].t;
-			
+			rect_id = if (fit_x && fit_y) {i as isize} else {rect_id};
+			if rect_id != -1 {break};
 		}
+
+		if (rect_id == -1) {
+			image_result[4 * id] = 128;
+			image_result[4 * id + 1] = 128;
+			image_result[4 * id + 2] = 128;
+			image_result[4 * id + 3] = 255;
+			min_one += 1;
+			continue;
+		}
+
+		let rect_id = rect_id as usize;
+
+		let rect_x = rect_list[rect_id].x;
+		let rect_y = rect_list[rect_id].y;
+		let rect_tex_idx = rect_list[rect_id].t;
+
+		let tex_offset_x = (x - rect_x) % TEX_SIZE_X;
+		let tex_offset_y = (y - rect_y) % TEX_SIZE_Y;
+		let tex_offset = tex_offset_x + tex_offset_y * TEX_SIZE_X;
+		let tex_offset = tex_offset + rect_tex_idx * TEX_SIZE_X * TEX_SIZE_Y;
+		
+		image_result[4*id+0] = image_atlas[4*tex_offset+0];
+		image_result[4*id+1] = image_atlas[4*tex_offset+1];
+		image_result[4*id+2] = image_atlas[4*tex_offset+2];
+		image_result[4*id+3] = image_atlas[4*tex_offset+3];
+		not_min_one += 1;
 	}
-	println!("-1 count: {}, !-1 count: {}", rect_minus_one_count, rect_not_minus_one_count);
+	println!("minus one: {}, not minus one: {}", min_one, not_min_one);
 	dump_image("./render_result.png", &image_result, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
 	image_result
 }
@@ -267,8 +240,6 @@ fn hash(msg: &[u8]) -> Vec<Rect> {
 
 	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
 	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
-
-	println!("scale_x: {}, scale_y: {}", scale_x, scale_y);
 
 	for i in 0..RECT_COUNT {
 		let x = scene_seed[offset % scene_seed.len()] as usize * scale_x;
@@ -289,9 +260,10 @@ fn hash(msg: &[u8]) -> Vec<Rect> {
 			t
 		})
 	}
-	for (i, rect) in rect_list.iter().enumerate() {
-		println!("{}: {}", i, rect);
-	}
+	// for (i, rect) in rect_list.iter().enumerate() {
+		// println!("{}: {}", i, rect);
+	// }
+	println!("Rectangles from hash are finished.");
 	rect_list
 	// let image = render_image(&rect_list, &image_atlas);
 }
@@ -326,8 +298,8 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 	let mut writer = encoder.write_header().unwrap();
 
 	// let data: [u8; image.len()] = 
-
 	writer.write_image_data(&image).unwrap();
+	println!("Image {} is dumped.", &file_name);
 }
 
 fn render() {
