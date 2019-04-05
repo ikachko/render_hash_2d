@@ -2,17 +2,13 @@ extern crate ocl;
 extern crate image;
 extern crate png;
 
-
-use ocl::{Buffer};
-use std::io;
-
-use std::fs::{self, DirEntry, File};
-use std::path::Path;
-use std::fmt;
-use std::io::BufWriter;
-
 use png::HasParameters;
-use sha2::{Sha256, Sha512, Digest};
+use sha2::{Sha256, Digest};
+use std::io;
+use std::io::BufWriter;
+use std::fmt;
+use std::fs::{self, File};
+use std::path::Path;
 
 const IMAGE_SIZE_X: usize = 1920 * 2;
 const IMAGE_SIZE_Y: usize = 1080 * 2;
@@ -22,13 +18,9 @@ const TEX_SIZE_X: usize = 1920;
 const TEX_SIZE_Y: usize = 1080;
 
 const RECT_COUNT: usize = 6;
-
-const RECT_LIST_BUF_SIZE: usize = 1000 * 8 * 4;
-
 const TEX_COUNT: usize = 4;
 
 enum FileReadError {
-	NotFound(),
 	IOError(io::Error),
 	DecodeError(png::DecodingError),
 }
@@ -45,7 +37,6 @@ impl From<png::DecodingError> for FileReadError {
 	}
 }
 
-
 struct Rect {
 	x: usize,
 	y: usize,
@@ -61,19 +52,11 @@ impl fmt::Display for Rect {
 	}
 }
 
-struct OpenCL {
-	platform: ocl::Platform,
-	device: ocl::Device,
-	context: ocl::Context,
-	queue: ocl::Queue
-}
-
-
 /// Function: read_files 
 /// --------------------
 /// @desc read all files from passed directory
 /// @param &str dir - directory, from which textures will be readen
-/// @param bool printable - print message on finishing function
+/// @param printable: bool - marker for printing(or not) message after finishing function 
 /// @return Result<Vec<u8> FileReadError> - returns atlas of pictures or FileReadError with enum depending on error type
 fn read_files(dir: &str, printable: bool) -> Result<Vec<u8>, FileReadError> {
 	let paths = fs::read_dir(dir)?;
@@ -131,6 +114,13 @@ fn sha256_hash(data: &[u8]) -> [u8; 32] {
 	ret
 }
 
+/// Function: render_image
+/// --------------------
+/// @desc function for rendering image for hash with generated rectangles
+/// @param rect_list: &[Rect] - array of generated rectangles
+/// @param image_atlas: &Vec<u8> - atlas image from picked pictures
+/// @param printable: bool - marker for printing(or not) message after finishing function 
+/// @return Vec<u8> - returns u8 byte Vector with resulting image
 fn render_image(rect_list: &[Rect], image_atlas: &Vec<u8>, printable: bool) -> Vec<u8> {
 	let mut image_result: Vec<u8> = vec![0; IMAGE_SIZE_BYTE];
 
@@ -188,6 +178,11 @@ fn render_image(rect_list: &[Rect], image_atlas: &Vec<u8>, printable: bool) -> V
 	image_result
 }
 
+/// Function: generate_rectangles
+/// --------------------
+/// @desc function for creating rectangles using entropy from hashed message
+/// @param msg: &[u8] - array of u8 ([0;255]) numbers 
+/// @return Vec<Rect> - returns Vector of Rect filled with pseudo random rectangles
 fn generate_rectangles(msg: &[u8]) -> Vec<Rect> {
 	let scene_seed = sha256_hash(msg);
 
@@ -216,10 +211,17 @@ fn generate_rectangles(msg: &[u8]) -> Vec<Rect> {
 			t
 		})
 	}
-	// println!("Rectangles from hash are finished.");
 	rect_list
 }
 
+/// Function: dump_image
+/// --------------------
+/// @desc function for dumping array of colors to .png file
+/// @param file_name: &str - name of file
+/// @param image: &Vec<u8> - vector of numbers 
+/// @param width: u32 - width of dumped image
+/// @param height: u32 - height of dumped image
+/// @return none
 fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 	let path = Path::new(file_name);
 	let file = File::create(path).unwrap();
@@ -235,8 +237,16 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 	println!("Image {} is dumped.", &file_name);
 }
 
+/// Function: render_hash_2d_cpu
+/// --------------------
+/// @desc public function for creating render hash
+/// @param msg: &[u8] - message for entropy
+/// @param &str dir - directory, from which textures will be readen
+/// @param dump_img: bool - marker for dumping(or not) rendered image to .png file
+/// @param printable: bool - marker for printing(or not) message after finishing function
+/// @return [u8; 32] - generated hash
 pub fn render_hash_2d_cpu(msg: &[u8], dir: &str, dump_img: bool, printable: bool) -> [u8; 32] {
-	let image_atlas = match read_files("./tex/", printable) {
+	let image_atlas = match read_files(dir, printable) {
 		Ok(texture) => texture,
 		Err(e) => panic!(e)
 	};
