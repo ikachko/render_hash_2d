@@ -185,7 +185,6 @@ fn render_image(rect_list: &[Rect], image_atlas: &Vec<u8>, printable: bool) -> V
 	if printable {
 		println!("Render is finished.");
 	}
-	dump_image("./render_result.png", &image_result, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
 	image_result
 }
 
@@ -217,7 +216,7 @@ fn generate_rectangles(msg: &[u8]) -> Vec<Rect> {
 			t
 		})
 	}
-	println!("Rectangles from hash are finished.");
+	// println!("Rectangles from hash are finished.");
 	rect_list
 }
 
@@ -236,17 +235,17 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 	println!("Image {} is dumped.", &file_name);
 }
 
-pub fn render_hash(msg: &[u8], dir: &str) {
-	let image_atlas = match read_files("./tex/", true) {
+pub fn render_hash_2d_cpu(msg: &[u8], dir: &str, dump_img: bool, printable: bool) -> [u8; 32] {
+	let image_atlas = match read_files("./tex/", printable) {
 		Ok(texture) => texture,
 		Err(e) => panic!(e)
 	};
-
-	dump_image("./atlas_image.png", &image_atlas, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32 * TEX_COUNT as u32);
-
 	let rect_list = generate_rectangles(&msg);
+	let image = render_image(&rect_list, &image_atlas, printable);
 
-	let image = render_image(&rect_list, &image_atlas, true);
-
-	dump_image("./render_result.png", &image, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
+	if dump_img {
+		dump_image("./atlas_image.png", &image_atlas, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32 * TEX_COUNT as u32);
+		dump_image("./render_result.png", &image, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
+	}
+	sha256_hash(&image)
 }
