@@ -186,22 +186,19 @@ fn render_image(rect_list: &[Rect], image_atlas: &Vec<u8>, printable: bool) -> V
 fn generate_rectangles(msg: &[u8]) -> Vec<Rect> {
 	let scene_seed = sha256_hash(msg);
 
-	let mut offset = 0;
 	let mut rect_list: Vec<Rect> = Vec::new();
 
 	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
 	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
 
+	let mut seed_iter = scene_seed.into_iter().cycle();
+
 	for i in 0..RECT_COUNT {
-		let x = scene_seed[offset % scene_seed.len()] as usize * scale_x;
-		offset += 1;
-		let y = scene_seed[offset % scene_seed.len()] as usize * scale_y;
-		offset += 1;
-		let w = scene_seed[offset % scene_seed.len()] as usize * scale_x;
-		offset += 1;
-		let h = scene_seed[offset % scene_seed.len()] as usize * scale_y;
-		offset += 1;
-		let t = scene_seed[offset % scene_seed.len()] as usize % TEX_COUNT;
+		let x = *seed_iter.next().unwrap() as usize * scale_x;
+		let y = *seed_iter.next().unwrap() as usize * scale_y;
+		let w = *seed_iter.next().unwrap() as usize * scale_x;
+		let h = *seed_iter.next().unwrap() as usize * scale_y;
+		let t = *seed_iter.next().unwrap() as usize % TEX_COUNT;
 
 		rect_list.push(Rect {
 			x,
