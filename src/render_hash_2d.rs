@@ -14,12 +14,41 @@ struct OpenCL {
 	queue: ocl::Queue
 }
 
+pub struct RenderCL {
+	queue: ocl::Queue,
+	render_kern: ocl::Kernel,
+	imgsize: usize,
+
+	imgwidth: usize,
+	imgheight: usize,
+	imgbuf: ocl::Buffer<u8>,
+}
+
+impl RenderCL {
+	pub fn new() -> RenderCL {
+		let platform = ocl::Platform::default();
+        let device = ocl::Device::first(platform).unwrap();   /* TODO: Should be smarter with selecting GPU */
+        let context = ocl::Context::builder().platform(platform).devices(device.clone()).build().unwrap();
+        let queue = ocl::Queue::new(&context, device, None).unwrap();
+
+		// let rect_list_buf_gpu = ocl::Buffer::<u8>::builder().queue(queue.clone()).flags(ocl::)
+		let rect_list_buf_gpu = ocl::Buffer::<u8>::builder()
+			.queue(queue.clone())
+			.flags(ocl::flags::MEM_READ_ONLY)
+			.dims(RECT_LIST_BUF_SIZE)
+			.unwrap();
+	}
+}
+
 fn init_opencl() -> OpenCL {
 	let platform = ocl::Platform::default();
 	let device =  match ocl::Device::first(platform) {
 		Err(why) => panic!("{:?}", why),
 		Ok(d) => d
 	};
+
+	// let device = ocl::Device::list(platform)[1];
+	// let devices = ocl::Device::list(platform, );
 
 	let context = ocl::Context::builder().platform(platform).devices(device.clone()).build().unwrap();
 	let queue = ocl::Queue::new(&context, device, None).unwrap();
