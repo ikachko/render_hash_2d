@@ -1,11 +1,16 @@
 mod render_hash_2d_cpu;
+mod render_hash_2d;
 
 use render_hash_2d_cpu::render_hash_2d_cpu;
+// use render_hash_2d::render_hash_2d;
+
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+
 fn usage() {
     println!("Usage: cargo run [hash_type]");
     println!("hash types:");
@@ -15,13 +20,13 @@ fn usage() {
 fn colored_print(msg: &str, color: Color, background_color: Color) {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
 
-    stdout.set_color(ColorSpec::new().set_bg(Some(background_color)));
-    stdout.set_color(ColorSpec::new().set_fg(Some(color)));
+    stdout.set_color(ColorSpec::new().set_bg(Some(background_color))).unwrap();
+    stdout.set_color(ColorSpec::new().set_fg(Some(color))).unwrap();
 
     write!(&mut stdout, "{}", msg).unwrap();
 
-    stdout.set_color(ColorSpec::new().set_bg(Some(Color::Black)));
-    stdout.set_color(ColorSpec::new().set_fg(Some(Color::White)));
+    stdout.set_color(ColorSpec::new().set_bg(Some(Color::Black))).unwrap();
+    stdout.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
 }
 
 fn cpu_mine(tx_dir: &str) {
@@ -33,7 +38,9 @@ fn cpu_mine(tx_dir: &str) {
 
     let end = u32::pow(2, 16);
 
-    for i in 0..end {
+    let mut msg_iterator = 0;
+
+    for _ in 0..end {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
 
         if now - last_stat_ts > 1000 {
@@ -44,7 +51,9 @@ fn cpu_mine(tx_dir: &str) {
         }
         hash_count += 1;
 
-        msg[10] = i as u8;
+        msg[msg_iterator] += 1;
+        msg_iterator += 1;
+        msg_iterator = if msg_iterator > msg.len() { 0 } else { msg_iterator + 1 }; 
 
         let hash = render_hash_2d_cpu(&msg, &tx_dir, false, false);
         colored_print("Mining..\n", Color::Rgb(0x20, 0xc2, 0x0e), Color::Black);

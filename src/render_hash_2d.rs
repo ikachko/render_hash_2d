@@ -1,3 +1,19 @@
+extern crate ocl;
+
+use ocl::{Buffer};
+
+const IMAGE_SIZE_X: usize = 1920 * 2;
+const IMAGE_SIZE_Y: usize = 1080 * 2;
+const IMAGE_SIZE_BYTE: usize = IMAGE_SIZE_X * IMAGE_SIZE_Y * 4;
+const RECT_LIST_BUF_SIZE: usize = 1000 * 8 * 4;
+
+struct OpenCL {
+	platform: ocl::Platform,
+	device: ocl::Device,
+	context: ocl::Context,
+	queue: ocl::Queue
+}
+
 fn init_opencl() -> OpenCL {
 	let platform = ocl::Platform::default();
 	let device =  match ocl::Device::first(platform) {
@@ -16,7 +32,7 @@ fn init_opencl() -> OpenCL {
 	}
 }
 
-fn render() {
+pub fn render_hash_2d() {
 	let s_open_cl: OpenCL = init_opencl();
 
 	let rect_list_buf_gpu = Buffer::<f32>::builder()

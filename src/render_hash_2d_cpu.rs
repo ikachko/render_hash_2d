@@ -193,7 +193,7 @@ fn generate_rectangles(msg: &[u8]) -> Vec<Rect> {
 
 	let mut seed_iter = scene_seed.into_iter().cycle();
 
-	for i in 0..RECT_COUNT {
+	for _ in 0..RECT_COUNT {
 		let x = *seed_iter.next().unwrap() as usize * scale_x;
 		let y = *seed_iter.next().unwrap() as usize * scale_y;
 		let w = *seed_iter.next().unwrap() as usize * scale_x;
@@ -251,7 +251,8 @@ pub fn render_hash_2d_cpu(msg: &[u8], dir: &str, dump_img: bool, printable: bool
 	let image = render_image(&rect_list, &image_atlas, printable);
 
 	if dump_img {
-		dump_image("./atlas_image.png", &image_atlas, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32 * TEX_COUNT as u32);
+		println!("Dumping images...");
+		dump_image("./atlas_image.png", &image_atlas, 1920, 1080 * TEX_COUNT as u32);
 		dump_image("./render_result.png", &image, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
 	}
 	sha256_hash(&image)
