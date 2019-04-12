@@ -196,7 +196,8 @@ fn init_opencl() -> OpenCL {
 	}
 }
 
-pub fn render_hash_2d() {
+pub fn render_hash_2d() -> [u8; 32]
+{
 	let s_ocl: OpenCL = init_opencl();
 
 	// let rect_list_buf_host: Vec<u8> = vec![0; RECT_LIST_BUF_SIZE];
@@ -309,22 +310,52 @@ pub fn render_hash_2d() {
 
 	unsafe {
 		kern.cmd()
-			.gws(1)
+			.gws(kernel_global_size)
 			.enq()
 			.unwrap();
 	}
 
 	println!("Kern finished.");
-	let mut image_buf_host = vec![0; IMAGE_SIZE_BYTE];
+	let mut image_buf_host: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); TEX_SIZE_CHAR4];
 	let img_buf_len = image_buf_host.len();
-	println!("image_buf_gpu len: {}, image_buf_host len: {}", image_buf_gpu.len(), image_buf_host.len());
-	// println!("{:#?}", image_buf_host);
-	// image_buf_gpu.read(&mut image_buf_host)
-	// 	.enq()
-	// 	.unwrap();
-	println!("Image buf gpu finished.");
+	
+	let old_image_buf_host = image_buf_host.clone();
 
-	// println!("{:#?}", image_buf_host);
+	println!("image_buf_gpu len: {}, image_buf_host len: {}", image_buf_gpu.len(), image_buf_host.len());
+	// println!("{:#?}", image_buf_gpu);
+	image_buf_gpu.read(&mut image_buf_host)
+		.enq()
+		.unwrap();
+	println!("Image buf gpu finished.");
+	let mut image_vec_host: Vec<u8> = vec![0; IMAGE_SIZE_BYTE];
+
+	for (idx, c4) in image_buf_host.iter().enumerate() {
+		image_vec_host[idx] = *c4.get(0).unwrap() as u8;
+		image_vec_host[idx + 1] = *c4.get(1).unwrap() as u8;
+		image_vec_host[idx + 2] = *c4.get(2).unwrap() as u8;
+		image_vec_host[idx + 3] = *c4.get(3).unwrap() as u8;
+	}
+
+	// for (old_i, i) in image_buf_host.iter().zip(&old_image_buf_host) {
+	// 	if (
+	// 		(*old_i.get(0).unwrap() != *i.get(0).unwrap()) &&
+	// 		(*old_i.get(1).unwrap() != *i.get(1).unwrap()) &&
+	// 		(*old_i.get(2).unwrap() != *i.get(2).unwrap()) &&
+	// 		(*old_i.get(3).unwrap() != *i.get(3).unwrap()) 
+	// 	)
+	// 	 {
+	// 		println!("<>_<>");
+	// 	}
+	// }
+	let hash = sha256_hash(&image_vec_host);
+	// println!("{:#?}", &hash);
+	hash
+	// for i in image_vec_host {
+		// if i != 0 {
+			// println!("{}", i);
+		// }
+	// }
+	// println!("{:#?}", image_vec_host);
 	// kern.set_arg_buf_named("rect_list_length", Some(rect_list.len() as u64));
 	// kern.set_arg_buf_named("rect_list", Some(&rect_list_buf_gpu));
 	// et kern = ocl::Kernel::new("draw_call_rect_list", &program).unwrap()
@@ -336,6 +367,4 @@ pub fn render_hash_2d() {
 	// 	.arg_scl_named("tex_size_x", Some(TEX_SIZE_X as u8))
 	// 	.arg_scl_named("tex_size_y", Some(TEX_SIZE_Y as u8))
 	// 	.queue(s_ocl.queue.clone());
-
-
 }
