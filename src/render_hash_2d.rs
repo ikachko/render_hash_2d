@@ -7,6 +7,9 @@ use ocl::{Buffer};
 use std::fs::{self, File};
 use std::io;
 use sha2::{Sha256, Digest};
+use std::path::Path;
+use std::io::BufWriter;
+use png::HasParameters;
 
 const TEX_SIZE_X: usize = 1920;
 const TEX_SIZE_Y: usize = 1080;
@@ -99,6 +102,21 @@ impl RenderCL {
 	}
 }
 
+fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
+	let path = Path::new(file_name);
+	let file = File::create(path).unwrap();
+
+	let ref mut w = BufWriter::new(file);
+
+	let mut encoder = png::Encoder::new(w, width, height);
+	encoder.set(png::ColorType::RGBA).set(png::BitDepth::Eight);
+
+	let mut writer = encoder.write_header().unwrap();
+
+	writer.write_image_data(&image).unwrap();
+	println!("Image {} is dumped.", &file_name);
+}
+
 fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer::<ocl_core::Char4>, FileReadError> {
 	let paths = fs::read_dir(dir)?;
 	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * TEX_COUNT;
@@ -108,7 +126,8 @@ fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer:
 	let mut image_atlas = vec![0; tex_size_bytes];
 	
 	let mut tex_offset = 0;
-	
+	let mut tex_offset_png = 0;
+
 	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * TEX_COUNT;
 	// let mut tex_buf_host: Vec<u8> = vec![0; TEX_SIZE_X * TEX_SIZE_Y * 4];
 	let mut image_atlas_buf_gpu = ocl::Buffer::<ocl_core::Char4>::builder()
@@ -118,6 +137,8 @@ fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer:
 		.build()
 		.unwrap();
 	let mut image_atlas: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); tex_size_char4];
+	let mut image_atlas_png = vec![0; tex_size_bytes];
+
 	for path in paths {
 		let decoder = png::Decoder::new(File::open(path?.path())?);
 		let (info, mut reader) = decoder.read_info()?;
@@ -125,7 +146,8 @@ fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer:
 		let height = info.height as usize;
 		let mut buff = vec![0; info.buffer_size()];
 		let mut image_atlas: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); tex_size_char4];
-		// let mut image_atlas = vec![0; tex_size_bytes];
+		
+		
 
 
 		let color_type = info.color_type;
@@ -142,6 +164,7 @@ fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer:
 			for y in 0..TEX_SIZE_Y {
 				let src_offset = num_bytes * (x + y * width);
 				let dst_offset = (x + y * TEX_SIZE_X) + tex_offset;
+				let dst_png_offset = 4 * (x + y * TEX_SIZE_X) + tex_offset_png;
 
 				image_atlas[dst_offset] = ocl_core::Char4::new(
 					buff[src_offset] as i8,
@@ -149,15 +172,18 @@ fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer:
 					buff[src_offset + 2] as i8,
 					127
 				);
-				// image_atlas[dst_offset] = buff[src_offset];
-				// image_atlas[dst_offset + 1] = buff[src_offset + 1];
-				// image_atlas[dst_offset + 2] = buff[src_offset + 2];
-				// image_atlas[dst_offset + 3] = 255;
+				image_atlas_png[dst_png_offset] = buff[src_offset];
+				image_atlas_png[dst_png_offset + 1] = buff[src_offset + 1];
+				image_atlas_png[dst_png_offset + 2] = buff[src_offset + 2];
+				image_atlas_png[dst_png_offset + 3] = 255;
 			}
 		}
 		tex_offset += width * height;
+		tex_offset_png += width * height * 4;
+
 		// tex_offset += tex_buf_host.len();
 	}
+	dump_image("gpu_img.png", &image_atlas_png, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
 	// Ok(image_atlas_buf_gpu)
 	// println!("AAAA");
 	// println!("{:#?}", tex_buf_host);
@@ -181,8 +207,12 @@ fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer:
 fn init_opencl() -> OpenCL {
 	let platform = ocl::Platform::default();
 	let device = ocl::Device::first(platform);
-
-	// let device = ocl::Device::list(platform)[1];
+	
+	// let device = ocl::Device::list_all(platform).unwrap();
+	// println!("{:#?}", device);
+	// let device = ocl::Device::list_select(platform, Some(ocl::core::DEVICE_TYPE_GPU), &[0]).unwrap()[0];
+	
+	
 	// let devices = ocl::Device::list(platform, );
 
 	let context = ocl::Context::builder().platform(platform).devices(device.clone()).build().unwrap();
@@ -196,7 +226,7 @@ fn init_opencl() -> OpenCL {
 	}
 }
 
-pub fn render_hash_2d() -> [u8; 32]
+pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 {
 	let s_ocl: OpenCL = init_opencl();
 
@@ -241,8 +271,6 @@ pub fn render_hash_2d() -> [u8; 32]
 		.arg_scl_named("tex_size_x", Some(TEX_SIZE_X as u32))
 		.arg_scl_named("tex_size_y", Some(TEX_SIZE_Y as u32))
 		.queue(s_ocl.queue.clone());
-
-	let msg: Vec<u8> = vec![0; 64];
 
 	let scene_seed = sha256_hash(&msg);
 

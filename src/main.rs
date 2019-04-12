@@ -1,7 +1,10 @@
-mod render_hash_2d_cpu;
+// extern crate render_hash_2d_cpu;
 mod render_hash_2d;
+mod render_hash_2d_cpu;
 
-use render_hash_2d_cpu::render_hash_2d_cpu;
+// use self::render_hash_2d_cpu;
+
+// use self::render_hash_2d_cpu::render_hash_2d_cpu;
 // use render_hash_2d::render_hash_2d;
 
 use std::env;
@@ -17,53 +20,53 @@ fn usage() {
     println!("  --cpu - run render_hash on CPU");
 }
 
-fn colored_print(msg: &str, color: Color, background_color: Color) {
-    let mut stdout = StandardStream::stdout(ColorChoice::Always);
+// fn colored_print(msg: &str, color: Color, background_color: Color) {
+//     let mut stdout = StandardStream::stdout(ColorChoice::Always);
 
-    stdout.set_color(ColorSpec::new().set_bg(Some(background_color))).unwrap();
-    stdout.set_color(ColorSpec::new().set_fg(Some(color))).unwrap();
+//     stdout.set_color(ColorSpec::new().set_bg(Some(background_color))).unwrap();
+//     stdout.set_color(ColorSpec::new().set_fg(Some(color))).unwrap();
 
-    write!(&mut stdout, "{}", msg).unwrap();
+//     write!(&mut stdout, "{}", msg).unwrap();
 
-    stdout.set_color(ColorSpec::new().set_bg(Some(Color::Black))).unwrap();
-    stdout.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
-}
+//     stdout.set_color(ColorSpec::new().set_bg(Some(Color::Black))).unwrap();
+//     stdout.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+// }
 
-fn cpu_mine(tx_dir: &str) {
-    let mut msg = [0; 80];
+// fn cpu_mine(tx_dir: &str) {
+//     let mut msg = [0; 80];
 
-    let start_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
-    let mut last_stat_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
-    let mut hash_count = 0;
+//     let start_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+//     let mut last_stat_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+//     let mut hash_count = 0;
 
-    let end = u32::pow(2, 16);
+//     let end = u32::pow(2, 16);
 
-    let mut msg_iterator = 0;
+//     let mut msg_iterator = 0;
 
-    for _ in 0..end {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+//     for _ in 0..end {
+//         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
 
-        if now - last_stat_ts > 1000 {
-            let hash_rate = hash_count as f64/(now - last_stat_ts) as f64 * 1000 as f64;
-            println!("hashrate: {}", hash_rate);
-            last_stat_ts = now;
-            hash_count = 0;
-        }
-        hash_count += 1;
+//         if now - last_stat_ts > 1000 {
+//             let hash_rate = hash_count as f64/(now - last_stat_ts) as f64 * 1000 as f64;
+//             println!("hashrate: {}", hash_rate);
+//             last_stat_ts = now;
+//             hash_count = 0;
+//         }
+//         hash_count += 1;
 
-        msg[msg_iterator] += 1;
-        msg_iterator += 1;
-        msg_iterator = if msg_iterator > msg.len() { 0 } else { msg_iterator + 1 }; 
+//         msg[msg_iterator] += 1;
+//         msg_iterator += 1;
+//         msg_iterator = if msg_iterator > msg.len() { 0 } else { msg_iterator + 1 }; 
 
-        let hash = render_hash_2d_cpu(&msg, &tx_dir, false, false);
-        colored_print("Mining..\n", Color::Rgb(0x20, 0xc2, 0x0e), Color::Black);
-        if hash[0] == 0 {
-            colored_print("Mining is finished. ", Color::Red, Color::Green);
-            println!("Final hash: {:?}", hash);
-            break;
-        }
-    }
-}
+//         let hash = render_hash_2d_cpu(&msg, &tx_dir, false, false);
+//         colored_print("Mining..\n", Color::Rgb(0x20, 0xc2, 0x0e), Color::Black);
+//         if hash[0] == 0 {
+//             colored_print("Mining is finished. ", Color::Red, Color::Green);
+//             println!("Final hash: {:?}", hash);
+//             break;
+//         }
+//     }
+// }
 
 fn main() {
 	// let dir: &str = "./tex/";
@@ -81,8 +84,14 @@ fn main() {
     //     usage();
     // }
 
-    use render_hash_2d::render_hash_2d;
+    let msg = vec![0; 64];
 
-    render_hash_2d();
+    use render_hash_2d::render_hash_2d;
+    use render_hash_2d_cpu::render_hash_2d_cpu;
+
+    let hash1 = render_hash_2d(&msg);
+    let hash2 = render_hash_2d_cpu(&msg, "./tex/", true, false);
+    println!("hash1: {:?}", hash1);
+    println!("hash2: {:?}", hash2);
     println!("After render_hash_2d.");
 }
