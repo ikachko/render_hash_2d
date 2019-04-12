@@ -66,18 +66,23 @@ fn cpu_mine(tx_dir: &str) {
 }
 
 fn main() {
-	let dir: &str = "./tex/";
+	// let dir: &str = "./tex/";
     
-    let hash_types: Vec<String> = vec!["--cpu", "--gpu"].iter().map(|x| x.to_string()).collect();
+    // let hash_types: Vec<String> = vec!["--cpu", "--gpu"].iter().map(|x| x.to_string()).collect();
 
-    let args: Vec<String> = env::args().collect();
+    // let args: Vec<String> = env::args().collect();
 
-    if args.len() == 2 && hash_types.contains(&args[1]) {
-        if args[1] == "--cpu" {
-            cpu_mine("./tex/");
-        }
-    }
-    else {
-        usage();
-    }
+    // if args.len() == 2 && hash_types.contains(&args[1]) {
+    //     if args[1] == "--cpu" {
+    //         cpu_mine("./tex/");
+    //     }
+    // }
+    // else {
+    //     usage();
+    // }
+
+    use render_hash_2d::render_hash_2d;
+
+    render_hash_2d();
+    println!("After render_hash_2d.");
 }
