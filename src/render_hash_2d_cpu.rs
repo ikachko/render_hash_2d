@@ -191,14 +191,26 @@ fn generate_rectangles(msg: &[u8]) -> Vec<Rect> {
 	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
 	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
 
-	let mut seed_iter = scene_seed.into_iter().cycle();
 
-	for _ in 0..RECT_COUNT {
+	let mut seed_iter = scene_seed.into_iter().cycle();
+	
+	println!("Scene seed: {:?}", scene_seed);
+	println!("Scale x: {}, Scale y: {}", scale_x, scale_y);
+	
+	for i in 0..RECT_COUNT {
 		let x = *seed_iter.next().unwrap() as usize * scale_x;
 		let y = *seed_iter.next().unwrap() as usize * scale_y;
 		let w = *seed_iter.next().unwrap() as usize * scale_x;
 		let h = *seed_iter.next().unwrap() as usize * scale_y;
 		let t = *seed_iter.next().unwrap() as usize % TEX_COUNT;
+
+		println!("[{}] - x: {}, y: {}, w: {}, h: {}, t: {}",
+			i,
+			x,
+			y,
+			w,
+			h,
+			t);
 
 		rect_list.push(Rect {
 			x,
@@ -243,6 +255,8 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 /// @param printable: bool - marker for printing(or not) message after finishing function
 /// @return [u8; 32] - generated hash
 pub fn render_hash_2d_cpu(msg: &[u8], dir: &str, dump_img: bool, printable: bool) -> [u8; 32] {
+	println!("================\nRENDER_HASH_2D_СPU");
+
 	let image_atlas = match read_files(dir, printable) {
 		Ok(texture) => texture,
 		Err(e) => panic!(e)

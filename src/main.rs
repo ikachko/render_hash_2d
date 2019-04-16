@@ -90,8 +90,8 @@ fn main() {
     use render_hash_2d_cpu::render_hash_2d_cpu;
 
     let hash1 = render_hash_2d(&msg);
-    // let hash2 = render_hash_2d_cpu(&msg, "./tex/", true, false);
+    let hash2 = render_hash_2d_cpu(&msg, "./tex/", true, false);
     println!("hash1: {:?}", hash1);
-    // println!("hash2: {:?}", hash2);
+    println!("hash2: {:?}", hash2);
     println!("After render_hash_2d.");
 }

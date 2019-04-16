@@ -17,8 +17,8 @@ const TEX_SIZE_Y: usize = 1080;
 const RECT_COUNT: usize = 6;
 const TEX_COUNT: usize = 4;
 
-const IMAGE_SIZE_X: usize = 1920 * 2;
-const IMAGE_SIZE_Y: usize = 1080 * 2;
+const IMAGE_SIZE_X: usize = 1920;
+const IMAGE_SIZE_Y: usize = 1080;
 const IMAGE_SIZE_BYTE: usize = IMAGE_SIZE_X * IMAGE_SIZE_Y * 4;
 
 const RECT_LIST_BUF_SIZE: usize = 5 * 6;
@@ -43,21 +43,16 @@ impl From<png::DecodingError> for FileReadError {
 	}
 }
 
-struct OpenCL {
+pub struct RenderCL {
 	platform: ocl::Platform,
 	device: ocl::Device,
 	context: ocl::Context,
-	queue: ocl::Queue
-}
-
-pub struct RenderCL {
 	queue: ocl::Queue,
-	render_kern: ocl::Kernel,
-	imgsize: usize,
 
-	imgwidth: usize,
-	imgheight: usize,
-	imgbuf: ocl::Buffer<u8>,
+	rect_list_buf_gpu: ocl::Buffer<i32>,
+	debug_buf_gpu: ocl::Buffer<i32>,
+	image_buf_gpu: ocl::Buffer<ocl_core::Char4>,
+
 }
 
 struct Rect {
@@ -81,26 +76,42 @@ fn sha256_hash(data: &[u8]) -> [u8; 32] {
 }
 
 impl RenderCL {
-	pub fn new() {
+	pub fn new() -> RenderCL {
 		let platform = ocl::Platform::default();
-        let device = ocl::Device::first(platform);   /* TODO: Should be smarter with selecting GPU */
+        let device = ocl::Device::first(platform);
         let context = ocl::Context::builder().platform(platform).devices(device.clone()).build().unwrap();
         let queue = ocl::Queue::new(&context, device, None).unwrap();
 
-		// let rect_list_buf_gpu = ocl::Buffer::<u8>::builder().queue(queue.clone()).flags(ocl::)
-		let rect_list_buf_gpu = ocl::builders::BufferBuilder::<u8>::new()
+		let rect_list_buf_gpu = ocl::builders::BufferBuilder::<i32>::new()
 			.flags(ocl::flags::MEM_READ_WRITE)
 			.queue(queue.clone())
 			.dims(RECT_LIST_BUF_SIZE)
 			.build()
 			.unwrap();
 	
-		println!("{:#?}", rect_list_buf_gpu);
-		// let rect_list_buf_gpu = ocl::Buffer::<u8>::builder()
-			// .queue(queue.clone())
-			// .flags(ocl::flags::MEM_READ_ONLY)
-			// .dims(RECT_LIST_BUF_SIZE)
-			// .unwrap();
+		let debug_buf_gpu = Buffer::<i32>::builder()
+			.queue(queue.clone())
+			.flags(ocl::flags::MEM_READ_WRITE)
+			.dims(IMAGE_SIZE_X * IMAGE_SIZE_Y)
+			.build()
+			.unwrap();
+		
+		let image_buf_gpu = Buffer::<ocl_core::Char4>::builder()
+			.queue(queue.clone())
+			.flags(ocl::flags::MEM_READ_WRITE)
+			.dims(TEX_SIZE_X * TEX_SIZE_Y)
+			.build()
+			.unwrap();
+		
+		RenderCL {
+			platform,
+			device,
+			context,
+			queue,
+			rect_list_buf_gpu,
+			debug_buf_gpu,
+			image_buf_gpu
+		}
 	}
 }
 
@@ -119,34 +130,24 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 	println!("Image {} is dumped.", &file_name);
 }
 
-fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer<ocl_core::Char4>, FileReadError> {
-	let paths = fs::read_dir(dir)?;
-	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * TEX_COUNT;
-	
-	let tex_size_char4 = TEX_SIZE_X * TEX_SIZE_Y * TEX_COUNT;
-
-	let mut image_atlas = vec![0; tex_size_bytes];
-	
+fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffer<ocl_core::Char4>, FileReadError> {
+	let paths = fs::read_dir(dir)?;	
+	let tex_size_char4 = TEX_SIZE_X * TEX_SIZE_Y * TEX_COUNT;	
 	let mut tex_offset = 0;
 	let mut tex_offset_png = 0;
 
 	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * TEX_COUNT;
-	// let mut tex_buf_host: Vec<u8> = vec![0; TEX_SIZE_X * TEX_SIZE_Y * 4];
 	let mut image_atlas_buf_gpu = ocl::Buffer::<ocl_core::Char4>::builder()
 		.queue(s_ocl.queue.clone())
 		.flags(ocl::flags::MEM_WRITE_ONLY)
 		.dims(tex_size_bytes)
 		.build()
 		.unwrap();
-	let mut image_atlas: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); tex_size_char4];
+	let image_atlas: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); tex_size_char4];
 	let mut image_atlas_png = vec![0; tex_size_bytes];
 
-	let mut i = 0;
-
-	let mut debug_paths = fs::read_dir(dir)?.into_iter();
 
 	for path in paths {
-		// let path_name = path?;
 		let decoder = png::Decoder::new(File::open(&path?.path())?);
 		let (info, mut reader) = decoder.read_info()?;
 		let width = info.width as usize;
@@ -190,56 +191,36 @@ fn read_files(dir: &str, s_ocl: &OpenCL, printable: bool) -> Result<ocl::Buffer<
 		.enq()
 		.unwrap();
 	Ok(image_atlas_buf_gpu)
-} 
-
-fn init_opencl() -> OpenCL {
-	let platform = ocl::Platform::default();
-	let device = ocl::Device::first(platform);
-	let context = ocl::Context::builder().platform(platform).devices(device.clone()).build().unwrap();
-	let queue = ocl::Queue::new(&context, device, None).unwrap();
-
-	OpenCL {
-		platform,
-		device,
-		context,
-		queue
-	}
 }
 
 pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 {
-	let s_ocl: OpenCL = init_opencl();
+	println!("================\nRENDER_HASH_2D");
 	let mut rect_list_buf_host: Vec<i32> = vec![0; RECT_LIST_BUF_SIZE];
+	let mut image_vec_host: Vec<u8> = vec![0; IMAGE_SIZE_BYTE];
+	let mut debug_arr = vec![0; IMAGE_SIZE_X * IMAGE_SIZE_Y];
+	let mut image_buf_host: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); TEX_SIZE_X * TEX_SIZE_Y];
+	let scene_seed = sha256_hash(&msg);
+	let mut rect_list: Vec<Rect> = Vec::new();
 
-	let rect_list_buf_gpu = Buffer::<i32>::builder()
-		.queue(s_ocl.queue.clone())
-		.flags(ocl::flags::MEM_READ_ONLY)
-		.dims(RECT_LIST_BUF_SIZE)
-		.build()
-		.unwrap();
+	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
+	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
 
-	let image_atlas_buf_gpu = match read_files("./tex/", &s_ocl, true) {
+	let render_cl = RenderCL::new();
+
+	let image_atlas_buf_gpu = match read_files("./tex/", &render_cl, true) {
 		Ok(atlas) => atlas,
 		Err(e) => panic!(e)
 	};	
 	println!("Atlas is finished.");
-	// let image_atlas_buf_gpu = Buffer::<ocl_core::Char4>::builder()
-	// 	.queue(s_ocl.queue.clone())
-	// 	.flags(ocl::flags::MEM_READ_WRITE)
-	// 	.dims(IMAGE_SIZE_BYTE);
-	let image_buf_gpu = Buffer::<ocl_core::Char4>::builder()
-		.queue(s_ocl.queue.clone())
-		.flags(ocl::flags::MEM_READ_WRITE)
-		.dims(IMAGE_SIZE_BYTE)
-		.build()
-		.unwrap();
 	
 	let program = ocl::Program::builder()
-		.devices(&s_ocl.device)
+		.devices(&render_cl.device)
 		.src_file("kernel.cl")
-		.build(&s_ocl.context)
+		.build(&render_cl.context)
 		.unwrap();
 	let mut kern = ocl::Kernel::new("draw_call_rect_list", &program).unwrap()
+		.arg_buf_named("debug_arr", None::<ocl::Buffer<i32>>)
 		.arg_buf_named("rect_list", None::<ocl::Buffer<i32>>)
 		.arg_buf_named("image_atlas", None::<ocl::Buffer<ocl_core::Char4>>)
 		.arg_buf_named("image_result", None::<ocl::Buffer<ocl_core::Char4>>)
@@ -247,23 +228,24 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 		.arg_scl_named("size_x", Some(IMAGE_SIZE_X as u32))
 		.arg_scl_named("tex_size_x", Some(TEX_SIZE_X as u32))
 		.arg_scl_named("tex_size_y", Some(TEX_SIZE_Y as u32))
-		.queue(s_ocl.queue.clone());
-
-	let scene_seed = sha256_hash(&msg);
-
-	let mut offset = (0..RECT_COUNT).into_iter().cycle();
-	let mut rect_list: Vec<Rect> = Vec::new();
-
-	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
-	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
-
+		.queue(render_cl.queue.clone());
+	
+	let mut seed_iter = scene_seed.into_iter().cycle();
+	println!("Scene seed: {:?}", scene_seed);
+	println!("Scale x: {}, Scale y: {}", scale_x, scale_y);
 	for i in (0..RECT_COUNT) {
-		let x = scene_seed[offset.next().unwrap() % scene_seed.len()] as usize * scale_x;
-		let y = scene_seed[offset.next().unwrap() % scene_seed.len()] as usize * scale_y;
-		let w = scene_seed[offset.next().unwrap() % scene_seed.len()] as usize * scale_x;
-		let h = scene_seed[offset.next().unwrap() % scene_seed.len()] as usize * scale_y;
-		let t = scene_seed[offset.next().unwrap() % scene_seed.len()] as usize % TEX_COUNT;
-
+		let x = *seed_iter.next().unwrap() as usize * scale_x;
+		let y = *seed_iter.next().unwrap() as usize * scale_y;
+		let w = *seed_iter.next().unwrap() as usize * scale_x;
+		let h = *seed_iter.next().unwrap() as usize * scale_y;
+		let t = *seed_iter.next().unwrap() as usize % TEX_COUNT;
+		println!("[{}] - x: {}, y: {}, w: {}, h: {}, t: {}",
+			i,
+			x,
+			y,
+			w,
+			h,
+			t);
 		rect_list.push({
 			Rect {
 				x,
@@ -284,24 +266,25 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 		rect_list_buf_host[rect_offset + 3] = rect.h as i32;
 		rect_list_buf_host[rect_offset + 4] = rect.t as i32;
 	}
-	
-	println!("{:#?}", rect_list_buf_host);
-
 	println!("Rect list buf calculated.");
-	rect_list_buf_gpu.write(&rect_list_buf_host)
+	render_cl.rect_list_buf_gpu.write(&rect_list_buf_host)
 			.src_offset(0)
 			.len(RECT_LIST_BUF_SIZE)
 			.enq()
-			.unwrap();
-	
+			.unwrap();	
 	println!("Rect list buf wrote.");
-	kern.set_arg_buf_named("rect_list", Some(&rect_list_buf_gpu));
-	kern.set_arg_buf_named("image_atlas", Some(&image_atlas_buf_gpu));
-	kern.set_arg_buf_named("image_result", Some(&image_buf_gpu));
 
+	// Setting kernel arguments
+	kern.set_arg_buf_named("debug_arr", Some(&render_cl.debug_buf_gpu)).unwrap();
+	kern.set_arg_buf_named("rect_list", Some(&render_cl.rect_list_buf_gpu)).unwrap();
+	kern.set_arg_buf_named("image_atlas", Some(&image_atlas_buf_gpu)).unwrap();
+	kern.set_arg_buf_named("image_result", Some(&render_cl.image_buf_gpu)).unwrap();
+
+	// Setting kernel parameters
 	let kernel_global_size = IMAGE_SIZE_X * IMAGE_SIZE_Y;
 	let kernel_local_size = 32;
 
+	// Launching kernel
 	unsafe {
 		kern.cmd()
 			.lws(kernel_local_size)
@@ -309,28 +292,32 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 			.enq()
 			.unwrap();
 	}
-
 	println!("Kern finished.");
-	let mut image_buf_host: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); TEX_SIZE_CHAR4];
-	let img_buf_len = image_buf_host.len();
+	println!("image_buf_gpu len: {}, image_buf_host len: {}", render_cl.image_buf_gpu.len(), image_buf_host.len());
 	
-	let old_image_buf_host = image_buf_host.clone();
-
-	println!("image_buf_gpu len: {}, image_buf_host len: {}", image_buf_gpu.len(), image_buf_host.len());
-	// println!("{:#?}", image_buf_gpu);
-	image_buf_gpu.read(&mut image_buf_host)
+	// Read buffers after GPU computing
+	render_cl.image_buf_gpu.read(&mut image_buf_host)
 		.enq()
 		.unwrap();
 	println!("Image buf gpu finished.");
-	let mut image_vec_host: Vec<u8> = vec![0; IMAGE_SIZE_BYTE];
+	render_cl.debug_buf_gpu.read(&mut debug_arr)
+		.enq()
+		.unwrap();
 
-	for (idx, c4) in image_buf_host.iter().enumerate() {
-		image_vec_host[idx] = *c4.get(0).unwrap() as u8;
-		image_vec_host[idx + 1] = *c4.get(1).unwrap() as u8;
-		image_vec_host[idx + 2] = *c4.get(2).unwrap() as u8;
-		image_vec_host[idx + 3] = *c4.get(3).unwrap() as u8;
-	}
+	println!("Printing char4");
 	dump_image("image_res.png", &image_vec_host, 1920, 1080);
+	println!("image_buf_host len: {}", image_buf_host.len());
+	println!("image_vec_host len: {}", image_vec_host.len());
+
+	// Copying from char4 to u8 array
+	for (idx, c4) in image_buf_host.iter().enumerate() {
+		let offset = idx * 4;
+		image_vec_host[offset] = *c4.get(0).unwrap() as u8;
+		image_vec_host[offset + 1] = *c4.get(1).unwrap() as u8;
+		image_vec_host[offset + 2] = *c4.get(2).unwrap() as u8;
+		image_vec_host[offset + 3] = *c4.get(3).unwrap() as u8;
+	}
+	
 	let hash = sha256_hash(&image_vec_host);
 	hash
 }
