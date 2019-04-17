@@ -185,6 +185,8 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 		tex_offset += width * height;
 		tex_offset_png += width * height * num_bytes;
 	}
+	println!("{:#?}", image_atlas_png);
+	dump_image("GPU_atlas.png", &image_atlas_png, 1920, 1080 * 4);
 	image_atlas_buf_gpu.write(&image_atlas)
 		.len(image_atlas.len())
 		.enq()
@@ -305,6 +307,7 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 	println!("image_buf_host len: {}", image_buf_host.len());
 	println!("image_vec_host len: {}", image_vec_host.len());
 
+	// println!("{:#?}", image_buf_host);
 	// Copying from char4 to u8 array
 	for (idx, c4) in image_buf_host.iter().enumerate() {
 		let offset = idx * 4;
