@@ -5,8 +5,9 @@ use ocl::{Buffer};
 // use ocl_core;
 
 use std::fs::{self, File};
-use std::io;
+use std::io::{self, Write};
 use sha2::{Sha256, Digest};
+use std::io::prelude::*; 
 use std::path::Path;
 use std::io::BufWriter;
 use png::HasParameters;
@@ -53,7 +54,7 @@ pub struct RenderCL {
 
 	rect_list_buf_gpu: ocl::Buffer<i32>,
 	debug_buf_gpu: ocl::Buffer<i32>,
-	image_buf_gpu: ocl::Buffer<ocl_core::Char4>,
+	image_buf_gpu: ocl::Buffer<u8>,
 
 }
 
@@ -94,10 +95,10 @@ impl RenderCL {
 			None
 		).unwrap();
 
-		let image_buf_gpu = Buffer::<ocl_core::Char4>::new(
+		let image_buf_gpu = Buffer::<u8>::new(
 			&queue,
 			None,
-			IMAGE_SIZE,
+			IMAGE_SIZE_BYTE,
 			None
 		).unwrap();
 
@@ -128,7 +129,7 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 	println!("Image {} is dumped.", &file_name);
 }
 
-fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffer<ocl_core::Char4>, FileReadError> {
+fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffer<u8>, FileReadError> {
 	let paths = fs::read_dir(dir)?;	
 	let tex_size_char4 = TEX_SIZE_X * TEX_SIZE_Y * TEX_COUNT;	
 	let mut tex_offset = 0;
@@ -136,13 +137,13 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 
 	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * TEX_COUNT;
 	
-	let mut image_atlas_buf_gpu = Buffer::<ocl_core::Char4>::new(
+	let mut image_atlas_buf_gpu = Buffer::<u8>::new(
 		&s_ocl.queue,
 		None,
 		tex_size_bytes,
 		None
 	).unwrap();
-	let image_atlas: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); tex_size_char4];
+	let mut image_atlas: Vec<u8> = vec![0; tex_size_bytes];
 	let mut image_atlas_png = vec![0; tex_size_bytes];
 
 
@@ -151,9 +152,7 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 		let (info, mut reader) = decoder.read_info()?;
 		let width = info.width as usize;
 		let height = info.height as usize;
-		let mut buff = vec![0; info.buffer_size()];
-		let mut image_atlas: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); tex_size_char4];
-		
+		let mut buff = vec![0; info.buffer_size()];		
 		let color_type = info.color_type;
 
 		let num_bytes = {
@@ -170,12 +169,6 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 				let dst_offset = (x + y * TEX_SIZE_X) + tex_offset;
 				let dst_png_offset = 4 * (x + y * TEX_SIZE_X) + tex_offset_png;
 
-				image_atlas[dst_offset] = ocl_core::Char4::new(
-					buff[src_offset] as i8,
-					buff[src_offset + 1] as i8,
-					buff[src_offset + 2] as i8,
-					127
-				);
 				image_atlas_png[dst_png_offset] = buff[src_offset];
 				image_atlas_png[dst_png_offset + 1] = buff[src_offset + 1];
 				image_atlas_png[dst_png_offset + 2] = buff[src_offset + 2];
@@ -185,10 +178,10 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 		tex_offset += width * height;
 		tex_offset_png += width * height * num_bytes;
 	}
-	println!("{:#?}", image_atlas_png);
+	// println!("{:#?}", image_atlas_png);
 	dump_image("GPU_atlas.png", &image_atlas_png, 1920, 1080 * 4);
-	image_atlas_buf_gpu.write(&image_atlas)
-		.len(image_atlas.len())
+	image_atlas_buf_gpu.write(&image_atlas_png)
+		.len(image_atlas_png.len())
 		.enq()
 		.unwrap();
 	Ok(image_atlas_buf_gpu)
@@ -245,11 +238,10 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 	println!("================\nRENDER_HASH_2D");
 	let kernel_global_size = IMAGE_SIZE_X * IMAGE_SIZE_Y;
 	let kernel_local_size = 32;
-	let mut image_vec_host: Vec<u8> = vec![0; IMAGE_SIZE_BYTE];
 	let mut debug_arr = vec![0; IMAGE_SIZE_X * IMAGE_SIZE_Y];
-	let mut image_buf_host: Vec<ocl_core::Char4> = vec![ocl_core::Char4::new(0,0,0,0); TEX_SIZE_X * TEX_SIZE_Y];
+	let mut image_buf_host: Vec<u8> = vec![0; IMAGE_SIZE_BYTE];
 
-	let render_cl = RenderCL::new();
+	let mut render_cl = RenderCL::new();
 
 	let image_atlas_buf_gpu = match read_files("./tex/", &render_cl, true) {
 		Ok(atlas) => atlas,
@@ -265,9 +257,8 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 
 	let rect_list_buf_host = generate_rectangles(&msg);
 	println!("Scene seed finished.");
+
 	render_cl.rect_list_buf_gpu.write(&rect_list_buf_host)
-			.src_offset(0)
-			.len(RECT_LIST_BUF_SIZE)
 			.enq()
 			.unwrap();
 
@@ -297,26 +288,21 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 	render_cl.image_buf_gpu.read(&mut image_buf_host)
 		.enq()
 		.unwrap();
+	// println!("{:#?}", image_buf_host);
 	println!("Image buf gpu finished.");
 	render_cl.debug_buf_gpu.read(&mut debug_arr)
 		.enq()
 		.unwrap();
 
-	println!("Printing char4");
-	dump_image("image_res.png", &image_vec_host, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
-	println!("image_buf_host len: {}", image_buf_host.len());
-	println!("image_vec_host len: {}", image_vec_host.len());
-
-	// println!("{:#?}", image_buf_host);
-	// Copying from char4 to u8 array
-	for (idx, c4) in image_buf_host.iter().enumerate() {
-		let offset = idx * 4;
-		image_vec_host[offset] = *c4.get(0).unwrap() as u8;
-		image_vec_host[offset + 1] = *c4.get(1).unwrap() as u8;
-		image_vec_host[offset + 2] = *c4.get(2).unwrap() as u8;
-		image_vec_host[offset + 3] = *c4.get(3).unwrap() as u8;
-	}
+	let strings: Vec<String> = debug_arr.iter().map(|n| n.to_string()).collect();
+	let mut file = File::create("./debug.log").expect("Unable to create file");
 	
-	let hash = sha256_hash(&image_vec_host);
+	writeln!(file, "{}", strings.join("\n")).unwrap();
+	println!("image_buf_host len : {}", image_buf_host.len());
+
+	dump_image("image_res.png", &image_buf_host, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
+	println!("image_buf_host len: {}", image_buf_host.len());
+
+	let hash = sha256_hash(&image_buf_host);
 	hash
 }
