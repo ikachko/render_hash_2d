@@ -21,18 +21,19 @@ for i in [0 ... 80]
 start_ts = Date.now()
 last_stat_ts = Date.now()
 hash_count = 0
-for i in [0 ... 2 ** 16]
-  now = Date.now()
-  if now - last_stat_ts > 1000
-    hashrate = hash_count/(now - last_stat_ts)*1000
-    process.stdout.write "hashrate: #{hashrate.toFixed(2)} h/s   \r"
-    last_stat_ts = now
-    hash_count = 0
-  hash_count++
+await hash_fn.hash msg, defer(err, hash); throw err if err
+#for i in [0 ... 2 ** 16]
+#  now = Date.now()
+#  if now - last_stat_ts > 1000
+#    hashrate = hash_count/(now - last_stat_ts)*1000
+#    process.stdout.write "hashrate: #{hashrate.toFixed(2)} h/s   \r"
+#    last_stat_ts = now
+#    hash_count = 0
+#  hash_count++
   
-  msg.writeInt32BE i, 10
-  await hash_fn.hash msg, defer(err, hash); throw err if err
-  break if hash[0] == 0
+#  msg.writeInt32BE i, 10
+#  await hash_fn.hash msg, defer(err, hash); throw err if err
+#  break if hash[0] == 0
 
 esp_ts = Date.now() - start_ts
 p '\n'
