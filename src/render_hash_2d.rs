@@ -83,7 +83,7 @@ impl RenderCL {
 
 		let rect_list_buf_gpu = ocl::Buffer::<i32>::new(
 			&queue,
-			None,
+			Some(ocl::flags::MEM_READ_WRITE),
 			RECT_LIST_BUF_SIZE,
 			None
 		).unwrap();
@@ -139,12 +139,12 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 	
 	let mut image_atlas_buf_gpu = Buffer::<u8>::new(
 		&s_ocl.queue,
-		None,
+		Some(ocl::flags::MEM_READ_ONLY),
 		tex_size_bytes,
 		None
 	).unwrap();
 	let mut image_atlas: Vec<u8> = vec![0; tex_size_bytes];
-	let mut image_atlas_png = vec![0; tex_size_bytes];
+	let mut image_atlas_png: Vec<u8> = vec![0; tex_size_bytes];
 
 
 	for path in paths {
@@ -166,7 +166,6 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 		for x in 0..TEX_SIZE_X {
 			for y in 0..TEX_SIZE_Y {
 				let src_offset = num_bytes * (x + y * width);
-				let dst_offset = (x + y * TEX_SIZE_X) + tex_offset;
 				let dst_png_offset = 4 * (x + y * TEX_SIZE_X) + tex_offset_png;
 
 				image_atlas_png[dst_png_offset] = buff[src_offset];
@@ -179,7 +178,7 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 		tex_offset_png += width * height * num_bytes;
 	}
 	// println!("{:#?}", image_atlas_png);
-	dump_image("GPU_atlas.png", &image_atlas_png, 1920, 1080 * 4);
+	//dump_image("GPU_atlas.png", &image_atlas_png, 1920, 1080 * 4);
 	image_atlas_buf_gpu.write(&image_atlas_png)
 		.len(image_atlas_png.len())
 		.enq()
@@ -243,7 +242,25 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 
 	let mut render_cl = RenderCL::new();
 
-	let image_atlas_buf_gpu = match read_files("./tex/", &render_cl, true) {
+	let program = ocl::Program::builder()
+		.devices(&render_cl.device)
+		.src_file("kernel.cl")
+		.build(&render_cl.context)
+		.unwrap();
+	let mut kern = ocl::Kernel::new("draw_call_rect_list", &program).unwrap()
+		.arg_buf_named("debug_arr", None::<ocl::Buffer<i32>>)
+		.arg_buf_named("rect_list", None::<ocl::Buffer<i32>>)
+		.arg_buf_named("image_atlas", None::<ocl::Buffer<u8>>)
+		.arg_buf_named("image_result", None::<ocl::Buffer<u8>>)
+		.arg_scl_named("rect_list_length", Some(RECT_COUNT as u32))
+		.arg_scl_named("size_x", Some(IMAGE_SIZE_X as u32))
+		.arg_scl_named("tex_size_x", Some(TEX_SIZE_X as u32))
+		.arg_scl_named("tex_size_y", Some(TEX_SIZE_Y as u32))
+		.lws(kernel_local_size)
+		.gws(kernel_global_size)
+		.queue(render_cl.queue.clone());
+
+	let mut image_atlas_buf_gpu = match read_files("./tex/", &render_cl, true) {
 		Ok(atlas) => atlas,
 		Err(e) => panic!(e)
 	};	
@@ -262,18 +279,10 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 			.enq()
 			.unwrap();
 
-	let kern = ocl::Kernel::new("draw_call_rect_list", &program).unwrap()
-		.lws(kernel_local_size)
-		.gws(kernel_global_size)
-		.arg_buf_named("debug_arr",  Some(&render_cl.debug_buf_gpu))
-		.arg_buf_named("rect_list", Some(&render_cl.rect_list_buf_gpu))
-		.arg_buf_named("image_atlas", Some(&image_atlas_buf_gpu))
-		.arg_buf_named("image_result", Some(&render_cl.image_buf_gpu))
-		.arg_scl_named("rect_list_length", Some(RECT_COUNT as u32))
-		.arg_scl_named("size_x", Some(IMAGE_SIZE_X as u32))
-		.arg_scl_named("tex_size_x", Some(TEX_SIZE_X as u32))
-		.arg_scl_named("tex_size_y", Some(TEX_SIZE_Y as u32))
-		.queue(render_cl.queue);
+	kern.set_arg_buf_named("debug_arr",  Some(&render_cl.debug_buf_gpu));
+	kern.set_arg_buf_named("rect_list", Some(&render_cl.rect_list_buf_gpu));
+	kern.set_arg_buf_named("image_atlas", Some(&image_atlas_buf_gpu));
+	kern.set_arg_buf_named("image_result", Some(&render_cl.image_buf_gpu));
 	
 
 	// Launching kernel
@@ -300,6 +309,7 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 	writeln!(file, "{}", strings.join("\n")).unwrap();
 	println!("image_buf_host len : {}", image_buf_host.len());
 
+	//let image_buf_host = image_buf_host.iter().map(|&e| e as u8).collect();
 	dump_image("image_res.png", &image_buf_host, IMAGE_SIZE_X as u32, IMAGE_SIZE_Y as u32);
 	println!("image_buf_host len: {}", image_buf_host.len());
 

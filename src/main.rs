@@ -84,7 +84,7 @@ fn main() {
     //     usage();
     // }
 
-    let msg = vec![0; 64];
+    let msg = vec![0; 80];
 
     use render_hash_2d::render_hash_2d;
     use render_hash_2d_cpu::render_hash_2d_cpu;
