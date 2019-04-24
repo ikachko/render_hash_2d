@@ -158,9 +158,9 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 		let num_bytes = {
 			if color_type == png::ColorType::RGBA {
 				4
-			} else {3} 
+			} else {3}
 		};
-		
+
 		reader.next_frame(&mut buff)?;
 		
 		for x in 0..TEX_SIZE_X {
@@ -278,6 +278,7 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 
 	// Launching kernel
 	unsafe {
+		// await!(kern.enq().unwrap());
 		kern.enq()
 			.unwrap();
 	}
