@@ -130,7 +130,14 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 }
 
 fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffer<u8>, FileReadError> {
-	let paths = fs::read_dir(dir)?;	
+	let paths = fs::read_dir(dir)?;
+
+	let mut paths: Vec<_> = fs::read_dir(dir)
+										.unwrap()
+										.map(|r| r.unwrap())
+										.collect();
+	paths.sort_by_key(|dir| dir.path());
+
 	let tex_size_char4 = TEX_SIZE_X * TEX_SIZE_Y * TEX_COUNT;	
 	let mut tex_offset = 0;
 	let mut tex_offset_png = 0;
@@ -148,7 +155,10 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 
 
 	for path in paths {
-		let decoder = png::Decoder::new(File::open(&path?.path())?);
+		let path = path.path();
+    	println!("{:?}", path);
+	    let decoder = png::Decoder::new(File::open(path)?);
+		//let decoder = png::Decoder::new(File::open(&path?.path())?);
 		let (info, mut reader) = decoder.read_info()?;
 		let width = info.width as usize;
 		let height = info.height as usize;
