@@ -248,8 +248,8 @@ fn generate_rectangles(msg: &[u8]) -> Vec<u8>{
 		rect_list_buf_host_LE.write_i32::<LittleEndian>(rect.t as i32).unwrap();
 	}
 
-	println!("{:#?}", rect_list_buf_host_LE);
-	println!("rect_list LE len : {}", rect_list_buf_host_LE.len());
+	// println!("{:#?}", rect_list_buf_host_LE);
+	// println!("rect_list LE len : {}", rect_list_buf_host_LE.len());
 	println!("Rect list buf calculated.");
 	
 	// rect_list_buf_host
