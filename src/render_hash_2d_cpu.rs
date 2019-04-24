@@ -10,8 +10,8 @@ use std::fmt;
 use std::fs::{self, File};
 use std::path::Path;
 
-const IMAGE_SIZE_X: usize = 1920 * 2;
-const IMAGE_SIZE_Y: usize = 1080 * 2;
+const IMAGE_SIZE_X: usize = 1920;
+const IMAGE_SIZE_Y: usize = 1080;
 const IMAGE_SIZE_BYTE: usize = IMAGE_SIZE_X * IMAGE_SIZE_Y * 4;
 
 const TEX_SIZE_X: usize = 1920;
