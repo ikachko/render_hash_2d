@@ -12,8 +12,8 @@ __kernel void draw_call_rect_list(
 	// per pixel shader
 	int global_id = get_global_id(0);
 	int id = global_id * 4;
-	int x = id % size_x;
-	int y = id / size_x;
+	int x = global_id % size_x;
+	int y = global_id / size_x;
 	
 	debug_arr[global_id] = global_id;
 
@@ -49,6 +49,7 @@ __kernel void draw_call_rect_list(
 	int tex_offset_y = (y - rect_y) % tex_size_y;
 	int tex_offset = tex_offset_x + tex_offset_y*tex_size_x;
 	tex_offset += rect_tex_idx * tex_size_x * tex_size_y;
+	tex_offset *= 4;
 
 	image_result[id] = image_atlas[tex_offset];
 	image_result[id + 1] = image_atlas[tex_offset + 1];

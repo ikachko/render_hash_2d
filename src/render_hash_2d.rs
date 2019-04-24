@@ -56,7 +56,7 @@ pub struct RenderCL {
 	context: ocl::Context,
 	queue: ocl::Queue,
 
-	rect_list_buf_gpu: ocl::Buffer<u8>,
+	rect_list_buf_gpu: ocl::Buffer<i32>,
 	debug_buf_gpu: ocl::Buffer<i32>,
 	image_buf_gpu: ocl::Buffer<u8>,
 
@@ -85,7 +85,7 @@ impl RenderCL {
         let context = ocl::Context::builder().platform(platform).devices(device.clone()).build().unwrap();
         let queue = ocl::Queue::new(&context, device, None).unwrap();
 
-		let rect_list_buf_gpu = ocl::Buffer::<u8>::new(
+		let rect_list_buf_gpu = ocl::Buffer::<i32>::new(
 			&queue,
 			None,
 			RECT_LIST_BUF_SIZE_BYTES,
@@ -198,16 +198,16 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 	Ok(image_atlas_buf_gpu)
 }
 
-fn generate_rectangles(msg: &[u8]) -> Vec<u8>{
+fn generate_rectangles(msg: &[u8]) -> Vec<i32>{
 	let scene_seed = sha256_hash(&msg);
 	let mut rect_list: Vec<Rect> = Vec::new();
-	// let mut rect_list_buf_host: Vec<i32> = vec![0; RECT_LIST_BUF_SIZE];
+	let mut rect_list_buf_host: Vec<i32> = vec![0; RECT_LIST_BUF_SIZE];
 	// let mut rect_list_buf_host = vec![];
 	let scale_x = IMAGE_SIZE_X / 255 as usize;
 	let scale_y = IMAGE_SIZE_Y / 255 as usize;
 	let mut seed_iter = scene_seed.into_iter().cycle();
 
-	for i in (0..RECT_COUNT) {
+	for i in 0..RECT_COUNT {
 		let x = *seed_iter.next().unwrap() as usize * scale_x;
 		let y = *seed_iter.next().unwrap() as usize * scale_y;
 		let w = *seed_iter.next().unwrap() as usize * scale_x;
@@ -231,29 +231,21 @@ fn generate_rectangles(msg: &[u8]) -> Vec<u8>{
 		})
 	}
 
-	let mut rect_list_buf_host_LE: Vec<u8> = vec![];
 	for (idx, rect) in rect_list.iter().enumerate() {
 		let rect_offset = idx * 5;
 		
-		// rect_list_buf_host[rect_offset] = rect.x as i32;
-		// rect_list_buf_host[rect_offset + 1] = rect.y as i32;
-		// rect_list_buf_host[rect_offset + 2] = rect.w as i32;
-		// rect_list_buf_host[rect_offset + 3] = rect.h as i32;
-		// rect_list_buf_host[rect_offset + 4] = rect.t as i32;
-
-		rect_list_buf_host_LE.write_i32::<LittleEndian>(rect.x as i32).unwrap();
-		rect_list_buf_host_LE.write_i32::<LittleEndian>(rect.y as i32).unwrap();
-		rect_list_buf_host_LE.write_i32::<LittleEndian>(rect.w as i32).unwrap();
-		rect_list_buf_host_LE.write_i32::<LittleEndian>(rect.h as i32).unwrap();
-		rect_list_buf_host_LE.write_i32::<LittleEndian>(rect.t as i32).unwrap();
+		rect_list_buf_host[rect_offset] = rect.x as i32;
+		rect_list_buf_host[rect_offset + 1] = rect.y as i32;
+		rect_list_buf_host[rect_offset + 2] = rect.w as i32;
+		rect_list_buf_host[rect_offset + 3] = rect.h as i32;
+		rect_list_buf_host[rect_offset + 4] = rect.t as i32;
 	}
 
 	println!("{:#?}", rect_list_buf_host_LE);
 	println!("rect_list LE len : {}", rect_list_buf_host_LE.len());
 	println!("Rect list buf calculated.");
 	
-	// rect_list_buf_host
-	rect_list_buf_host_LE
+	rect_list_buf_host
 }
 
 pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
