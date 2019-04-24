@@ -1,8 +1,8 @@
 __kernel void draw_call_rect_list(
 	__global int *debug_arr,
 	__global int *rect_list,
-	__global int *image_atlas,
-	__global int *image_result,
+	__global uchar *image_atlas,
+	__global uchar *image_result,
 	const unsigned int rect_list_length,
 	const unsigned int size_x,
 	const unsigned int tex_size_x,
