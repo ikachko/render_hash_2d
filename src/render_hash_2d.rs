@@ -197,12 +197,16 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 	Ok(image_atlas_buf_gpu)
 }
 
+fn custom_div(a: usize, b: usize) {
+
+}
+
 fn generate_rectangles(msg: &[u8]) -> Vec<i32>{
 	let scene_seed = sha256_hash(&msg);
 	let mut rect_list: Vec<Rect> = Vec::new();
 	let mut rect_list_buf_host: Vec<i32> = vec![0; RECT_LIST_BUF_SIZE];
-	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
-	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
+	let scale_x = IMAGE_SIZE_X / 255 as usize;
+	let scale_y = IMAGE_SIZE_Y / 255 as usize;
 	let mut seed_iter = scene_seed.into_iter().cycle();
 
 	for i in (0..RECT_COUNT) {
