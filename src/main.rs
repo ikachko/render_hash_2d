@@ -1,7 +1,9 @@
 // extern crate render_hash_2d_cpu;
 mod render_hash_2d;
 mod render_hash_2d_cpu;
+mod opencl_info;
 
+use opencl_info::print_all_info;
 // use self::render_hash_2d_cpu;
 
 // use self::render_hash_2d_cpu::render_hash_2d_cpu;
@@ -83,8 +85,9 @@ fn main() {
     // else {
     //     usage();
     // }
-
-    let msg = vec![0; 80];
+    print_all_info();
+    
+    let msg: Vec<u8> = (0..80).collect();
 
     use render_hash_2d::render_hash_2d;
     use render_hash_2d_cpu::render_hash_2d_cpu;

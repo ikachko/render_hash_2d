@@ -198,20 +198,28 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 }
 
 fn generate_rectangles(msg: &[u8]) -> Vec<i32>{
-	let scene_seed = sha256_hash(&msg);
+	let mut msg_buf = vec![0; msg.len() + 4];
+
+	for i in 0..msg.len() {
+		msg_buf[i + 4] = msg_buf[i];
+	}
+
 	let mut rect_list: Vec<Rect> = Vec::new();
 	let mut rect_list_buf_host: Vec<i32> = vec![0; RECT_LIST_BUF_SIZE];
-	// let mut rect_list_buf_host = vec![];
 	let scale_x = IMAGE_SIZE_X / 255 as usize;
 	let scale_y = IMAGE_SIZE_Y / 255 as usize;
-	let mut seed_iter = scene_seed.into_iter().cycle();
 
+	let mut offset = 0;
 	for i in 0..RECT_COUNT {
-		let x = *seed_iter.next().unwrap() as usize * scale_x;
-		let y = *seed_iter.next().unwrap() as usize * scale_y;
-		let w = *seed_iter.next().unwrap() as usize * scale_x;
-		let h = *seed_iter.next().unwrap() as usize * scale_y;
-		let t = *seed_iter.next().unwrap() as usize % TEX_COUNT;
+		msg_buf[i] = 0;
+		
+		let scene_seed = sha256_hash(&msg_buf);
+
+		let x = scene_seed[offset % scene_seed.len()] as usize * scale_x; offset += 1;
+		let y = scene_seed[offset % scene_seed.len()] as usize * scale_y; offset += 1;
+		let w = scene_seed[offset % scene_seed.len()] as usize * scale_x; offset += 1;
+		let h = scene_seed[offset % scene_seed.len()] as usize * scale_y; offset += 1;
+		let t = scene_seed[offset % scene_seed.len()] as usize % TEX_COUNT; offset += 1;
 		println!("[{}] - x: {}, y: {}, w: {}, h: {}, t: {}",
 			i,
 			x,
