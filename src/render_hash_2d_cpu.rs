@@ -10,8 +10,8 @@ use std::fmt;
 use std::fs::{self, File};
 use std::path::Path;
 
-const IMAGE_SIZE_X: usize = 1920 * 2;
-const IMAGE_SIZE_Y: usize = 1080 * 2;
+const IMAGE_SIZE_X: usize = 1920;
+const IMAGE_SIZE_Y: usize = 1080;
 const IMAGE_SIZE_BYTE: usize = IMAGE_SIZE_X * IMAGE_SIZE_Y * 4;
 
 const TEX_SIZE_X: usize = 1920;
@@ -59,14 +59,18 @@ impl fmt::Display for Rect {
 /// @param printable: bool - marker for printing(or not) message after finishing function 
 /// @return Result<Vec<u8> FileReadError> - returns atlas of pictures or FileReadError with enum depending on error type
 fn read_files(dir: &str, printable: bool) -> Result<Vec<u8>, FileReadError> {
-	let paths = fs::read_dir(dir)?;
+	let mut paths: Vec<_> = fs::read_dir(dir)
+										.unwrap()
+										.map(|r| r.unwrap())
+										.collect();
+	paths.sort_by_key(|dir| dir.path());
 	let tex_size_bytes = TEX_SIZE_X * TEX_SIZE_Y * 4 * TEX_COUNT;
 	let mut image_atlas = vec![0; tex_size_bytes];
 	
 	let mut tex_offset = 0;
 	
 	for path in paths {
-		let decoder = png::Decoder::new(File::open(path?.path())?);
+		let decoder = png::Decoder::new(File::open(path.path())?);
 		let (info, mut reader) = decoder.read_info()?;
 		let width = info.width as usize;
 		let height = info.height as usize;

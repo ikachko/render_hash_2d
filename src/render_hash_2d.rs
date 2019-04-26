@@ -7,15 +7,17 @@ use ocl::{Buffer};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use sha2::{Sha256, Digest};
+use std::i32;
 use std::io::prelude::*; 
 use std::path::Path;
 use std::io::BufWriter;
 use png::HasParameters;
+use byteorder::{LittleEndian, WriteBytesExt};
 
 const TEX_SIZE_X: usize = 1920;
 const TEX_SIZE_Y: usize = 1080;
 
-const RECT_COUNT: usize = 6;
+const RECT_COUNT: usize = 16;
 const TEX_COUNT: usize = 4;
 
 const IMAGE_SIZE_X: usize = 1920;
@@ -24,10 +26,12 @@ const IMAGE_SIZE: usize = IMAGE_SIZE_X * IMAGE_SIZE_Y;
 
 const IMAGE_SIZE_BYTE: usize = IMAGE_SIZE_X * IMAGE_SIZE_Y * 4;
 
-const RECT_LIST_BUF_SIZE: usize = 5 * 6;
-const RECT_LIST_LENGTH: u8 = 6;
+const RECT_LIST_BUF_SIZE: usize = 5 * RECT_COUNT;
+const RECT_LIST_BUF_SIZE_BYTES: usize = RECT_LIST_BUF_SIZE * 4;
 
-const TEX_SIZE_CHAR4: usize = TEX_SIZE_X * TEX_SIZE_Y * TEX_COUNT;
+// const RECT_LIST_LENGTH: u8 = 6;
+
+// const TEX_SIZE_CHAR4: usize = TEX_SIZE_X * TEX_SIZE_Y * TEX_COUNT;
 
 enum FileReadError {
 	IOError(io::Error),
@@ -83,8 +87,8 @@ impl RenderCL {
 
 		let rect_list_buf_gpu = ocl::Buffer::<i32>::new(
 			&queue,
-			Some(ocl::flags::MEM_READ_WRITE),
-			RECT_LIST_BUF_SIZE,
+			None,
+			RECT_LIST_BUF_SIZE_BYTES,
 			None
 		).unwrap();
 
@@ -130,7 +134,12 @@ fn dump_image(file_name: &str, image: &Vec<u8>, width: u32, height: u32) {
 }
 
 fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffer<u8>, FileReadError> {
-	let paths = fs::read_dir(dir)?;	
+	let mut paths: Vec<_> = fs::read_dir(dir)
+										.unwrap()
+										.map(|r| r.unwrap())
+										.collect();
+	paths.sort_by_key(|dir| dir.path());
+
 	let tex_size_char4 = TEX_SIZE_X * TEX_SIZE_Y * TEX_COUNT;	
 	let mut tex_offset = 0;
 	let mut tex_offset_png = 0;
@@ -148,7 +157,9 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 
 
 	for path in paths {
-		let decoder = png::Decoder::new(File::open(&path?.path())?);
+		let path = path.path();
+    	println!("{:?}", path);
+	    let decoder = png::Decoder::new(File::open(path)?);
 		let (info, mut reader) = decoder.read_info()?;
 		let width = info.width as usize;
 		let height = info.height as usize;
@@ -158,9 +169,9 @@ fn read_files(dir: &str, s_ocl: &RenderCL, printable: bool) -> Result<ocl::Buffe
 		let num_bytes = {
 			if color_type == png::ColorType::RGBA {
 				4
-			} else {3} 
+			} else {3}
 		};
-		
+
 		reader.next_frame(&mut buff)?;
 		
 		for x in 0..TEX_SIZE_X {
@@ -190,11 +201,12 @@ fn generate_rectangles(msg: &[u8]) -> Vec<i32>{
 	let scene_seed = sha256_hash(&msg);
 	let mut rect_list: Vec<Rect> = Vec::new();
 	let mut rect_list_buf_host: Vec<i32> = vec![0; RECT_LIST_BUF_SIZE];
-	let scale_x = (IMAGE_SIZE_X as f64 / 255.0).floor() as usize;
-	let scale_y = (IMAGE_SIZE_Y as f64 / 255.0).floor() as usize;
+	// let mut rect_list_buf_host = vec![];
+	let scale_x = IMAGE_SIZE_X / 255 as usize;
+	let scale_y = IMAGE_SIZE_Y / 255 as usize;
 	let mut seed_iter = scene_seed.into_iter().cycle();
 
-	for i in (0..RECT_COUNT) {
+	for i in 0..RECT_COUNT {
 		let x = *seed_iter.next().unwrap() as usize * scale_x;
 		let y = *seed_iter.next().unwrap() as usize * scale_y;
 		let w = *seed_iter.next().unwrap() as usize * scale_x;
@@ -227,8 +239,9 @@ fn generate_rectangles(msg: &[u8]) -> Vec<i32>{
 		rect_list_buf_host[rect_offset + 3] = rect.h as i32;
 		rect_list_buf_host[rect_offset + 4] = rect.t as i32;
 	}
-	println!("Rect list buf calculated.");
 
+	println!("Rect list buf calculated.");
+	
 	rect_list_buf_host
 }
 
@@ -244,7 +257,7 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 
 	let program = ocl::Program::builder()
 		.devices(&render_cl.device)
-		.src_file("kernel.cl")
+		.src_file("kernel_hard_plus.cl")
 		.build(&render_cl.context)
 		.unwrap();
 	let mut kern = ocl::Kernel::new("draw_call_rect_list", &program).unwrap()
@@ -287,6 +300,7 @@ pub fn render_hash_2d(msg: &[u8]) -> [u8; 32]
 
 	// Launching kernel
 	unsafe {
+		// await!(kern.enq().unwrap());
 		kern.enq()
 			.unwrap();
 	}
