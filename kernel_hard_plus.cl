@@ -1,7 +1,8 @@
 __kernel void draw_call_rect_list(
+  __global int *debug_arr,
   __global int *rect_list,
-  __global uchar4 *image_atlas,
-  __global uchar4 *image_result,
+  __global uchar *image_atlas,
+  __global uchar *image_result,
   const unsigned int rect_list_length,
   const unsigned int size_x,
   const unsigned int tex_size_x,
@@ -9,22 +10,23 @@ __kernel void draw_call_rect_list(
   )
 {
   // per pixel shader
-  int id = get_global_id(0);
-  int x = id % size_x;
-  int y = id / size_x;
+  int global_id = get_global_id(0);
+	int id = global_id * 4;
+	int x = global_id % size_x;
+	int y = global_id / size_x;
   
   int i;
   unsigned int r = 128 << 8;
   unsigned int g = 128 << 8;
   unsigned int b = 128 << 8;
-  uchar4 rgba;
-  rgba.x = 0;
-  rgba.y = 0;
-  rgba.z = 0;
-  rgba.w = 0;
+  // uchar4 rgba;
+  int rgba_x = 0;
+  int rgba_y = 0;
+  int rgba_z = 0;
+  int rgba_w = 0;
   
   for(i = 0;i < rect_list_length;i++){
-    int offset = i*8;
+    int offset = i * 5;
     int rect_x = rect_list[offset  ];
     int rect_y = rect_list[offset+1];
     int rect_w = rect_list[offset+2];
@@ -33,15 +35,22 @@ __kernel void draw_call_rect_list(
     bool fit_x = x >= rect_x && x < rect_x + rect_w;
     bool fit_y = y >= rect_y && y < rect_y + rect_h;
     if (fit_x && fit_y) {
-      int rect_tex_idx = rect_list[offset+4];
+      int rect_tex_idx = rect_list[offset + 4];
+
       int tex_offset_x = (x - rect_x) % tex_size_x;
       int tex_offset_y = (y - rect_y) % tex_size_y;
+      
       int tex_offset = tex_offset_x + tex_offset_y*tex_size_x;
       tex_offset += rect_tex_idx * tex_size_x * tex_size_y;
-      rgba = image_atlas[tex_offset];
-      r = (r + ((int)(rgba.x) << 8)) >> 1;
-      g = (g + ((int)(rgba.y) << 8)) >> 1;
-      b = (b + ((int)(rgba.z) << 8)) >> 1;
+      tex_offset *= 4;
+      
+      rgba_x = image_atlas[tex_offset];
+      rgba_y = image_atlas[tex_offset + 1];
+      rgba_z = image_atlas[tex_offset + 2];
+      rgba_w = image_atlas[tex_offset + 3];
+      r = (r + ((int)(rgba_x) << 8)) >> 1;
+      g = (g + ((int)(rgba_y) << 8)) >> 1;
+      b = (b + ((int)(rgba_z) << 8)) >> 1;
     }
   }
   
@@ -49,7 +58,7 @@ __kernel void draw_call_rect_list(
   g >>= 8;
   b >>= 8;
   
-  int supp = (rgba.x << 16) + (rgba.y << 8) + rgba.z;
+  int supp = (rgba_x << 16) + (rgba_y << 8) + rgba_z;
   int construct = (r << 16) + (g << 8) + b;
   
   if (y == 500) {
@@ -127,8 +136,8 @@ __kernel void draw_call_rect_list(
   g = construct >> 8;
   b = construct;
   
-  image_result[id].x = r;
-  image_result[id].y = g;
-  image_result[id].z = b;
-  image_result[id].w = 255;
+  image_result[id] = r;
+  image_result[id + 1] = g;
+  image_result[id + 2] = b;
+  image_result[id + 3] = 255;
 }
