@@ -81,7 +81,15 @@ fn sha256_hash(data: &[u8]) -> [u8; 32] {
 impl RenderCL {
 	pub fn new() -> RenderCL {
 		let platform = ocl::Platform::default();
-        let device = ocl::Device::first(platform);
+
+		let device = match ocl::Device::list_select(&platform, Some(ocl::flags::DEVICE_TYPE_GPU), &[0]) {
+			Ok(d) => d[0],
+			Err(e) => {
+				println!("{}: No GPU devices found.", e);
+				ocl::Device::first(&platform)
+			}
+		};
+
         let context = ocl::Context::builder().platform(platform).devices(device.clone()).build().unwrap();
         let queue = ocl::Queue::new(&context, device, None).unwrap();
 
